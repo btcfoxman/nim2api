@@ -373,10 +373,17 @@ class Service:
                 finished_at = time.time()
                 isolated = not self.store.has_account_overlap(
                     int(task["account_id"]), task_id, task["created_at"], finished_at)
+                observed_cost = (max(0, float(before) - float(after))
+                    if isolated and before is not None and after is not None else None)
+                quoted_cost = task.get("actual_cost")
+                # A subscription or credit grant can expire while a task runs.
+                # Do not turn that unrelated balance reset into a model price.
+                if (observed_cost is not None and quoted_cost is not None and
+                    observed_cost > max(float(quoted_cost) * 3, float(quoted_cost) + 100)):
+                    observed_cost = None
                 self.store.update_task(task_id, {"status": "succeeded", "progress": 100,
                     "result_urls": state["result_urls"], "balance_after": after,
-                    "actual_cost": max(0, float(before) - float(after))
-                        if isolated and before is not None and after is not None else task.get("actual_cost"),
+                    "actual_cost": observed_cost if isolated else quoted_cost,
                     "completed_at": finished_at})
                 return
             if state["status"] == "failed":
