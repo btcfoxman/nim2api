@@ -267,8 +267,17 @@ class CDPBrowser:
         return self.command("Network.getCookies", {"urls": [BASE + "/"]}).get("cookies") or []
 
     def project_id(self) -> str:
-        value = self.evaluate("(async()=>{let a=await(await fetch('/api/workflows/recentWorkflows',{credentials:'include'})).json();return Array.isArray(a)?String(a.find(x=>x.projectId)?.projectId||''):''})()", await_promise=True)
-        return str(value or "")
+        # Nim creates a default project before the first workflow. New accounts
+        # therefore have a project even while recentWorkflows is still empty.
+        response = self.get("/api/projects/getLastProject")
+        project = response.get("project") if isinstance(response, dict) else None
+        if isinstance(project, dict) and project.get("id") and not project.get("isTrashbin"):
+            return str(project["id"])
+        workflows = self.get("/api/workflows/recentWorkflows")
+        if isinstance(workflows, list):
+            return next((str(item["projectId"]) for item in workflows
+                         if isinstance(item, dict) and item.get("projectId")), "")
+        return ""
 
     def upload_file(self, path: Path) -> dict[str, Any]:
         """Multipart upload through the account browser and its configured proxy."""

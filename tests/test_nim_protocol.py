@@ -1,5 +1,6 @@
 ﻿from app.catalog import MODELS, normalize_request, bind_prompt
 from app.client import NimClient, STATIC_BASE
+from app.browser import CDPBrowser
 import pytest
 
 
@@ -51,3 +52,23 @@ def test_nim_submit_shape_and_completed_result():
     assert body['externalModel']=='falBytedanceSeedance2.0MiniReferenceToVideo'
     assert body['meta']['structuredFileInputs'][1]['durations']==[2.0]
     assert client.poll('wf-test')['result_urls']==[STATIC_BASE+'wf-output/video.mp4']
+
+
+def test_new_account_project_is_available_before_first_workflow():
+    browser = CDPBrowser.__new__(CDPBrowser)
+    calls = []
+
+    def get(path):
+        calls.append(path)
+        return {'project': {'id': 'new-project', 'isTrashbin': False}}
+
+    browser.get = get
+    assert browser.project_id() == 'new-project'
+    assert calls == ['/api/projects/getLastProject']
+
+
+def test_project_lookup_falls_back_to_existing_workflow():
+    browser = CDPBrowser.__new__(CDPBrowser)
+    browser.get = lambda path: ({'project': None} if path.endswith('getLastProject')
+                                else [{'projectId': 'old-project'}])
+    assert browser.project_id() == 'old-project'
