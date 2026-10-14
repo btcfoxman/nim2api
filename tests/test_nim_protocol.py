@@ -1,6 +1,8 @@
 ﻿from app.catalog import MODELS, normalize_request, bind_prompt
 from app.client import NimClient, STATIC_BASE
 from app.browser import CDPBrowser
+from app.errors import public_error
+from app.service import workflow_failure_code
 import pytest
 
 
@@ -72,3 +74,18 @@ def test_project_lookup_falls_back_to_existing_workflow():
     browser.get = lambda path: ({'project': None} if path.endswith('getLastProject')
                                 else [{'projectId': 'old-project'}])
     assert browser.project_id() == 'old-project'
+
+
+def test_external_nsfw_workflow_is_reported_as_content_moderation():
+    class Browser:
+        def get(self, path):
+            assert path == '/api/workflows/recentWorkflows'
+            return [{'id':'wf-filtered','erroredAt':'2026-10-14T00:00:00Z',
+                     'errorCause':'external_nsfw_filter','errorId':'opaque-uuid'}]
+
+    client=NimClient.__new__(NimClient)
+    client.browser=Browser()
+    result=client.poll('wf-filtered')
+    assert result['status']=='failed'
+    assert workflow_failure_code(result['error'],result['error_code'])=='CONTENT_MODERATION_FAILED'
+    assert public_error('UPSTREAM_FAILED',result['error'])['code']=='CONTENT_MODERATION_FAILED'

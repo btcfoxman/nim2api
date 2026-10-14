@@ -23,6 +23,17 @@ from .store import Store
 
 
 TERMINAL = {"succeeded", "failed", "expired"}
+
+
+def workflow_failure_code(reason: str, upstream_code: str) -> str:
+    """Classify NIM's finished workflow error without treating moderation as transient."""
+    if upstream_code in {"12009", "12011"} or "external_nsfw_filter" in reason.lower():
+        return "CONTENT_MODERATION_FAILED"
+    if "video editing task" in reason.lower():
+        return "VIDEO_EDIT_CONSTRAINT"
+    if upstream_code == "99999":
+        return "UPSTREAM_TEMPORARY"
+    return "UPSTREAM_FAILED"
 DEFAULT_SETTINGS: dict[str, Any] = {
     "task_workers": 10,
     "task_queue_capacity": 100,
@@ -389,14 +400,7 @@ class Service:
             if state["status"] == "failed":
                 reason = state["error"] or "Nim video generation failed"
                 upstream_code = state.get("error_code") or ""
-                if upstream_code in {"12009", "12011"}:
-                    code = "CONTENT_MODERATION_FAILED"
-                elif "video editing task" in reason.lower():
-                    code = "VIDEO_EDIT_CONSTRAINT"
-                elif upstream_code == "99999":
-                    code = "UPSTREAM_TEMPORARY"
-                else:
-                    code = "UPSTREAM_FAILED"
+                code = workflow_failure_code(reason, upstream_code)
                 self._settle_failed_balance(task, client)
                 self._fail(task_id, code, reason)
                 return
