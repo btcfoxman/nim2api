@@ -1,5 +1,6 @@
 ﻿from app.catalog import MODELS, normalize_request, bind_prompt
 from app.client import NimClient, STATIC_BASE
+import pytest
 
 
 def test_required_aliases_and_defaults():
@@ -12,16 +13,18 @@ def test_required_aliases_and_defaults():
     assert MODELS['wan-3.0'].limits == {'images':10,'videos':5,'audios':5}
 
 
-def test_media_markers_and_exact_9_3_3():
+def test_media_markers_and_upstream_visual_limit():
     body={'model':'sd-2-0-mini-480p','duration':4,'ratio':'16:9',
           'prompt':'参考 图片1 image9 音频2 Video3；视频6 是章节标题',
-          'image_urls':['nim:wf-input/i%d.jpg'%i for i in range(9)],
+          'image_urls':['nim:wf-input/i%d.jpg'%i for i in range(6)],
           'audio_urls':['nim:wf-input/a%d.mp3'%i for i in range(3)],
           'video_urls':['nim:wf-input/v%d.mp4'%i for i in range(3)]}
     task=normalize_request(body)
-    assert '@image1' in task['prompt'] and '@image9' in task['prompt']
+    assert '@image1' in task['prompt'] and 'image9' in task['prompt']
     assert '@audio2' in task['prompt'] and '@video3' in task['prompt']
-    assert len(task['images'])==9 and len(task['videos'])==3 and len(task['audios'])==3
+    assert len(task['images'])==6 and len(task['videos'])==3 and len(task['audios'])==3
+    with pytest.raises(ValueError, match='image and video references combined'):
+        normalize_request({**body,'image_urls':['nim:wf-input/i%d.jpg'%i for i in range(7)]})
 
 
 def test_nim_submit_shape_and_completed_result():

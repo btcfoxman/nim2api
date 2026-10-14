@@ -390,6 +390,7 @@ class Service:
                     code = "UPSTREAM_TEMPORARY"
                 else:
                     code = "UPSTREAM_FAILED"
+                self._settle_failed_balance(task, client)
                 self._fail(task_id, code, reason)
                 return
             self.store.update_task(task_id, {"status": "running", "progress": max(45, task["progress"])})
@@ -398,6 +399,29 @@ class Service:
             self.store.update_task(task_id, {"status": "expired", "progress": 100,
                 "error_code": "UPSTREAM_TIMEOUT", "error_message": "Nim task timed out; upstream run may continue",
                 "completed_at": time.time()})
+
+    def _settle_failed_balance(self, task: dict[str, Any], client: NimClient) -> None:
+        """Replace the submission precharge with the observed post-failure balance."""
+        before = task.get("balance_before")
+        after = None
+        for attempt in range(5):
+            try:
+                after = client.account_state()["available_balance"]
+            except BrowserError:
+                break
+            if before is None or float(after) >= float(before) or attempt == 4:
+                break
+            time.sleep(3)
+        if after is None:
+            return
+        account_id = int(task["account_id"])
+        self.store.update_account(account_id, {"balance": after})
+        isolated = not self.store.has_account_overlap(
+            account_id, task["id"], task["created_at"], time.time())
+        values = {"balance_after": after}
+        if isolated and before is not None:
+            values["actual_cost"] = max(0, float(before) - float(after))
+        self.store.update_task(task["id"], values)
 
     def _fail(self, task_id: str, code: str, message: str) -> None:
         self.store.update_task(task_id, {"status": "failed", "progress": 100,

@@ -17,6 +17,10 @@ class ModelSpec:
     def limits(self) -> dict[str, int]:
         return {"images": 30, "videos": 10, "audios": 10} if self.family == "2.5" else ({"images": 10, "videos": 5, "audios": 5} if self.family == "wan" else {"images": 9, "videos": 3, "audios": 3})
 
+    @property
+    def max_visual_files(self) -> int:
+        return {"2.5": 30, "wan": 10}.get(self.family, 9)
+
 def spec(name, upstream, resolution, family, mode, minimum=4, maximum=15):
     return ModelSpec(name, upstream, resolution, family, mode, minimum, maximum)
 
@@ -90,7 +94,9 @@ def normalize_request(body:dict[str,Any])->dict[str,Any]:
     if resolution!=model.resolution:raise ValueError(f'{name} uses {model.resolution}; choose the corresponding alias')
     for kind,limit in model.limits.items():
         if len(media[kind])>limit:raise ValueError(f'{name} supports at most {limit} {kind}')
+    if len(media['images'])+len(media['videos'])>model.max_visual_files:
+        raise ValueError(f'{name} supports at most {model.max_visual_files} image and video references combined')
     return {'model':name,'upstream_model':model.upstream_model,'advanced_mode':model.advanced_mode,'duration':duration,'resolution':resolution,'aspect_ratio':ratio,'prompt':bind_prompt(prompt,media),**media}
 
 def public_models()->list[dict[str,Any]]:
-    return [{'id':m.id,'object':'model','owned_by':'nimapi','capabilities':{'durations':list(range(m.min_duration,m.max_duration+1)),'resolutions':[m.resolution],'aspect_ratios':sorted(RATIOS-({'21:9'} if m.family=='wan' else set())),'media_limits':m.limits}} for m in MODELS.values()]
+    return [{'id':m.id,'object':'model','owned_by':'nimapi','capabilities':{'durations':list(range(m.min_duration,m.max_duration+1)),'resolutions':[m.resolution],'aspect_ratios':sorted(RATIOS-({'21:9'} if m.family=='wan' else set())),'media_limits':m.limits,'max_visual_files':m.max_visual_files}} for m in MODELS.values()]

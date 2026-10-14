@@ -22,7 +22,7 @@ NIM 网页协议视频服务。管理页与账号浏览器管理沿用 pip2api �
 
 视频任务 ID 形如 `nim_...`。提交后可轮询状态；成功时 `data[].url` 为 `static.nim.video` 结果链接。`/v1/videos/{task_id}/content` 重定向到视频。素材支持 HTTP(S) URL 与 base64 data URL；已由同一账号上传的 NIM 文件可用 `nim:wf-input/...` 引用。提示词中的 `图片1|图1|img1|Image1`、`视频1|视1|video1|v1`、`音频1|音1|audio1` 会归一为 NIM 的 `@image1`、`@video1`、`@audio1`。
 
-模型别名及规格见 `GET /v1/models`。未在别名中指定分辨率时默认 720p；`minimax-h3-768p` 固定 768p。素材上限：Seedance 2.0 为 9 图/3 视频/3 音频，Seedance 2.5 为 30/10/10，Wan 3.0 为 10/5/5，Minimax H3 为 9/3/3。账号选取使用同规格历史实耗，缺少样本时采用网页观察值估算；上游提交响应的 `creditsCharged` 与余额差可继续校正消耗参考。
+模型别名及规格见 `GET /v1/models`。未在别名中指定分辨率时默认 720p；`minimax-h3-768p` 固定 768p。每类素材上限：Seedance 2.0 为 9 图/3 视频/3 音频，Seedance 2.5 为 30/10/10，Wan 3.0 为 10/5/5，Minimax H3 为 9/3/3。此外，图片与视频合计不能超过模型的 `maxFiles`：2.0 和 Minimax 为 9，2.5 为 30，Wan 为 10。账号选取使用同规格历史实耗，缺少样本时采用网页观察值估算；上游提交预扣与任务结束后的余额差分别记录，失败后退款以余额差为准。
 
 部署工作流是 `.github/workflows/deploy-test.yml`：推送 `pre` 后构建 GHCR 镜像，经 3.5 pre 的自托管 runner 部署到 `/home/btcfoxman/docker/nim2api`，维护 cloudflared `nim2api.aiid.edu.kg` 入口。服务 `.env` 只留在服务器，不入仓库。
 
