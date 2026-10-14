@@ -105,7 +105,16 @@ jobs:
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          IMAGE_REGISTRY="$IMAGE_REGISTRY" IMAGE_NAMESPACE="$IMAGE_NAMESPACE" IMAGE_NAME="$IMAGE_NAME" IMAGE_TAG="$IMAGE_TAG" docker compose pull "$DEPLOY_SERVICE"
+          pulled=false
+          for attempt in 1 2 3 4; do
+            if IMAGE_REGISTRY="$IMAGE_REGISTRY" IMAGE_NAMESPACE="$IMAGE_NAMESPACE" IMAGE_NAME="$IMAGE_NAME" IMAGE_TAG="$IMAGE_TAG" docker compose pull "$DEPLOY_SERVICE"; then
+              pulled=true
+              break
+            fi
+            echo "Registry pull attempt $attempt failed; retrying after 15 seconds"
+            sleep 15
+          done
+          test "$pulled" = true
           IMAGE_REGISTRY="$IMAGE_REGISTRY" IMAGE_NAMESPACE="$IMAGE_NAMESPACE" IMAGE_NAME="$IMAGE_NAME" IMAGE_TAG="$IMAGE_TAG" docker compose up -d "$DEPLOY_SERVICE"
       - name: Verify service
         shell: bash
