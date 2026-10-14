@@ -1,0 +1,32 @@
+services:
+  nim2api:
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-btcfoxman}/${IMAGE_NAME:-nim2api}:${IMAGE_TAG:-latest}
+    container_name: nim2api
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-Asia/Taipei}
+      NIM_DATA_DIR: /app/data
+      NIM_CHROME_EXECUTABLE: /usr/bin/chromium
+      NIM_CHROME_USER_DATA_ROOT: /app/data/chrome-profiles
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data:/app/data
+    shm_size: "512mb"
+    ports:
+      - "${NIM2API_PORT:-8809}:8809"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8809/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - my-shared-net
+
+networks:
+  my-shared-net:
+    external: true
