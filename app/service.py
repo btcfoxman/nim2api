@@ -70,6 +70,8 @@ class Service:
     def update_settings(self, values: dict[str, Any]) -> dict[str, Any]:
         allowed = set(DEFAULT_SETTINGS)
         filtered = {key: value for key, value in values.items() if key in allowed}
+        if filtered.get("daily_checkin_enabled"):
+            raise ValueError("Nim daily credit claim endpoint has not been verified")
         for key in ("task_workers", "task_queue_capacity", "poll_interval_seconds", "task_timeout_seconds"):
             if key in filtered and not 1 <= int(filtered[key]) <= (3600 if key != "task_queue_capacity" else 10000):
                 raise ValueError(f"invalid {key}")
@@ -169,9 +171,8 @@ class Service:
             result = NimClient(account).daily_checkin()
         finally:
             self.browser_runtime.release(account, owned)
-        self.store.update_account(account_id, {"last_checkin_date": today})
         return {"already_checked_in": False, "date": today,
-                "received": result.get("receive_quota", 0)}
+                "received": 0, "unsupported": True}
 
     def create(self, request: dict[str, Any]) -> dict[str, Any]:
         normalized = normalize_request(request)

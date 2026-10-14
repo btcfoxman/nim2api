@@ -2,6 +2,7 @@
 from __future__ import annotations
 import hashlib
 import os
+import secrets
 import subprocess
 import tempfile
 from pathlib import Path
@@ -90,7 +91,8 @@ class NimClient:
             if kind=='audios':item['displayNames']=[record.get('displayName') or 'audio' for record in records]
             structured.append(item)
         body={'type':'image2video_dc','positive':normalized['prompt'],'negative':'',
-              'enhancePrompt':False,'seed':'-1','mediaLength':normalized['duration']*1000,
+              'enhancePrompt':False,'seed':str(secrets.randbelow(90_000_000)+10_000_000),
+              'mediaLength':normalized['duration']*1000,
               'requestedAspectRatio':normalized['aspect_ratio'],'generateAudio':True,
               'resolution':normalized['resolution'],'projectId':project_id,'basedOn':None,
               'source':'omnibox_advanced_mode_button','meta':{'advancedMode':normalized['advanced_mode'],

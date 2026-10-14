@@ -3,22 +3,15 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import ipaddress
 import mimetypes
-import struct
-import tempfile
 import threading
 import time
-import uuid
-import zlib
 from pathlib import Path
-from typing import Any
 from urllib.parse import urlsplit
 
 import requests
 
-from .browser import BrowserError, BrowserRejected, CDPBrowser
 
 
 MAX_MEDIA_BYTES = 200 * 1024 * 1024
@@ -26,63 +19,11 @@ MIME_EXTENSIONS = {"audio/mpeg": ".mp3", "audio/wav": ".wav", "image/jpeg": ".jp
                    "image/png": ".png", "video/mp4": ".mp4", "video/quicktime": ".mov"}
 _MEDIA_ROUTE_LOCK = threading.RLock()
 _DIRECT_MEDIA_UNTIL: dict[str, float] = {}
-# This caller-owned public media host consistently fails TLS through the
-# account proxy on pre, while its direct route succeeds. Nim hosts never
-# enter this list and always use the account proxy.
-_DIRECT_FIRST_MEDIA_HOSTS = frozenset({"media.juxingdonghua.com"})
+_DIRECT_FIRST_MEDIA_HOSTS: frozenset[str] = frozenset()
 
 
 class MediaError(Exception):
     pass
-
-
-def _unique_image_copy(data: bytes, mime: str) -> bytes | None:
-    """Make a visually identical upload copy when a prior asset lacks a cache ID."""
-    marker = b"nim2api-upload\x00" + uuid.uuid4().hex.encode("ascii")
-    if mime == "image/png" and data.startswith(b"\x89PNG\r\n\x1a\n"):
-        position = 8
-        while position + 12 <= len(data):
-            length = struct.unpack_from(">I", data, position)[0]
-            end = position + 12 + length
-            if end > len(data):
-                return None
-            if data[position + 4:position + 8] == b"IEND":
-                if position + 12 != len(data) or length:
-                    return None
-                chunk = (struct.pack(">I", len(marker)) + b"tEXt" + marker
-                         + struct.pack(">I", zlib.crc32(b"tEXt" + marker) & 0xffffffff))
-                return data[:position] + chunk + data[position:]
-            position = end
-    if mime == "image/jpeg" and data.startswith(b"\xff\xd8"):
-        comment = b"nim2api-upload:" + uuid.uuid4().hex.encode("ascii")
-        return data[:2] + b"\xff\xfe" + struct.pack(">H", len(comment) + 2) + comment + data[2:]
-    return None
-
-
-def _unique_mp4_copy(data: bytes, mime: str) -> bytes | None:
-    """Change the file identity without changing MP4 video or audio samples."""
-    if mime not in {"video/mp4", "video/quicktime"}:
-        return None
-    position = 0
-    found_ftyp = False
-    found_mdat = False
-    while position + 8 <= len(data):
-        size, kind = struct.unpack_from(">I4s", data, position)
-        header_size = 8
-        if size == 1:
-            if position + 16 > len(data):
-                return None
-            size = struct.unpack_from(">Q", data, position + 8)[0]
-            header_size = 16
-        if size < header_size or position + size > len(data):
-            return None
-        found_ftyp |= kind == b"ftyp"
-        found_mdat |= kind == b"mdat"
-        position += size
-    if position != len(data) or not found_ftyp or not found_mdat:
-        return None
-    marker = b"nim2api-upload-" + uuid.uuid4().hex.encode("ascii")
-    return data + struct.pack(">I4s", 8 + len(marker), b"free") + marker
 
 
 def _allow_direct_media_fallback(host: str | None) -> bool:
